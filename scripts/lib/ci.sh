@@ -142,6 +142,15 @@ ci_warning() {
   esac
 }
 
+# A notice: on GitHub an annotation on the run's page (title in $1), elsewhere a log line.
+ci_notice() {
+  local title="$1" msg="$2"
+  case "$CI_PLATFORM" in
+    github)  echo "::notice title=${title}::${msg}" ;;
+    *)       printf '%s: %s\n' "$title" "$msg" ;;
+  esac
+}
+
 # ---------------------------------------------------------------------------
 # Secret masking
 # ---------------------------------------------------------------------------
@@ -267,7 +276,7 @@ ci_create_deployment() {
             \"environment_url\": \"${url}\",
             \"description\": \"Viaalink CI/CD session ready\"
           }" > /dev/null 2>&1 || true
-        echo "Deployment created: View deployment button now visible"
+        echo "Deployment created: the address is on the repository's Deployments page"
       else
         ci_warning "Could not create deployment (check permissions)"
         DEPLOY_ID=""

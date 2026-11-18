@@ -62,7 +62,7 @@ There is no default relay: the session is always published through the relay who
 via gh terminal
 ```
 
-Pick the options, wait for the URL, open it and sign in with the username you chose and the `VIA_TERMINAL_PASSWORD` password. The same URL is in the run's summary and in its `tunnel-url-<session name>` artifact.
+Pick the options, wait for the URL, open it and sign in with the username you chose and the `VIA_TERMINAL_PASSWORD` password. The same URL is in the run's `tunnel-url-<session name>` artifact.
 
 ### In your own workflow
 
@@ -125,7 +125,29 @@ VS Code keeps a password of its own behind the login: after you sign in on the a
 
 `VIA_CODESERVER_PASSWORD` is a name of your choosing; store it with `gh secret set VIA_CODESERVER_PASSWORD`. An empty input (also a secret that does not exist) means the login password. The run's summary says which of the two VS Code asks for, never the value.
 
-`deployments: write` lets the action add a "View deployment" button to the run; without it the session still works.
+`deployments: write` lets the action record the session as a deployment (environment `via-cicd`); without it the session still works.
+
+### Start it from GitHub
+
+The workflow is an ordinary `workflow_dispatch` workflow: on the repository's **Actions** page, pick it, click **Run workflow**, fill in the form and start it. Open the run and its job: when the session is up, the log ends with its address. Sign in with the username from the form and the `VIA_TERMINAL_PASSWORD` password; **Cancel workflow** ends the session.
+
+The run's own page shows nothing while the session is open: GitHub shows a job's summary only after the job has ended.
+
+**If the address shows `***`.** GitHub replaces every secret's value in a log with `***`, also inside an address. With the relay's host name stored as a secret, the address reads `https://<name>.***`. The log then also links the repository's **Deployments** page (`https://github.com/<owner>/<repo>/deployments/via-cicd`), where the active deployment is the full address (this needs `deployments: write`). To get the address in the log itself, store the host name and port as repository variables instead; they are not secret:
+
+```bash
+gh variable set VIA_TUNNEL_HOST --repo <owner>/<repo>   # your relay's host name
+gh variable set VIA_TUNNEL_PORT --repo <owner>/<repo>   # its SSH port, when it is not 2222
+```
+
+and read them in the workflow, with the secret as a fallback:
+
+```yaml
+          tunnel-host: ${{ vars.VIA_TUNNEL_HOST || secrets.VIA_TUNNEL_HOST }}
+          tunnel-port: ${{ vars.VIA_TUNNEL_PORT || secrets.VIA_TUNNEL_PORT }}
+```
+
+Then delete the two secrets (`gh secret delete VIA_TUNNEL_HOST --repo <owner>/<repo>`, and `VIA_TUNNEL_PORT`): with the secret still named in the workflow, GitHub keeps hiding its value for as long as it exists. The key, its id, the host key fingerprints and the password stay secrets.
 
 ## Expose services during a job
 
