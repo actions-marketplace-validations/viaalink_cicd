@@ -29,7 +29,10 @@ trap on_exit EXIT
 touch "${STATE_DIR}/exposed"
 # --auth=basic: the terminal and VS Code are never published without the
 # login, whatever expose_auth or a checked-out via.yaml says.
-via expose "$SESSION_TARGET" "$SESSION_NAME" --auth=basic
+# GITHUB_STEP_SUMMARY empty for the CLI: it appends a block of its own to the
+# run summary when it publishes ("Open the hub ..."), above the action's. The
+# summary of this run is the action's to write.
+GITHUB_STEP_SUMMARY='' via expose "$SESSION_TARGET" "$SESSION_NAME" --auth=basic
 note_caddy_started
 
 # The hostname depends on the relay (a shared relay appends the client id, a
@@ -87,20 +90,40 @@ if [ "$SESSION_INTERFACE" = "codeserver" ]; then
     SECOND=$'\n\nVS Code then asks for a password of its own: the login password again.'
   fi
 fi
-ci_set_summary "$(cat << EOF2
-## ${SESSION_LABEL:-Session} ready
-
-**[${URL}](${URL})** (sign in as \`${VIA_BASIC_AUTH_USERNAME}\`)${SECOND}
-
-Open ${LIMIT}. ${ENDS}
-EOF2
-)"
-
 # GitHub: a "View deployment" button (needs deployments: write; skipped
 # without it). Passed on as a step output; the cleanup marks it inactive.
 ci_create_deployment "via-cicd" "Viaalink CI/CD ${SESSION_INTERFACE} session" "${URL}"
 ci_set_output "deploy_id" "${DEPLOY_ID:-}"
 # The post step (background mode) has no step output to read it from.
 if [ -n "${DEPLOY_ID:-}" ]; then echo "$DEPLOY_ID" > "${STATE_DIR}/deploy-id"; fi
+
+# Where someone who started the run from GitHub's Actions page finds the
+# address while the session is open. Not on the run's page: GitHub shows a
+# job's summary and its notices only when the job has ended, and replaces
+# every secret's value in them (and in this log) with ***; the relay's host
+# name is stored as a secret (via gh setup), so the address reads
+# https://<name>.*** there. The deployment holds the address as it is, on the
+# repository's Deployments page; a github.com link is not hidden, so the log
+# (here and in the keep-alive step) names that page.
+if [ -n "${DEPLOY_ID:-}" ]; then
+  DEPLOYMENTS_PAGE="${GITHUB_SERVER_URL:-https://github.com}/${CI_REPO}/deployments/via-cicd"
+  OPEN_FROM="Open it from ${DEPLOYMENTS_PAGE} (the active deployment links to the address) and sign in as ${VIA_BASIC_AUTH_USERNAME}."
+  HIDDEN="Does the address show \`***\`? GitHub hides your relay's host name here, because it is stored as a secret. While a session is open, its address is on the repository's [Deployments page](${DEPLOYMENTS_PAGE})."
+else
+  OPEN_FROM="For the address, run via gh active on your own device, or give the job deployments: write: the address is then on the repository's Deployments page. Sign in as ${VIA_BASIC_AUTH_USERNAME}."
+  HIDDEN="Does the address show \`***\`? GitHub hides your relay's host name here, because it is stored as a secret. Run \`via gh active\` on your own device for the address, or give the job \`deployments: write\`: the address is then on the repository's Deployments page while a session is open."
+fi
+echo "$OPEN_FROM" > "${STATE_DIR}/open-from.txt"
+ci_notice "${SESSION_LABEL} ready" "$OPEN_FROM"
+ci_set_summary "$(cat << EOF2
+## ${SESSION_LABEL:-Session} ready
+
+**[${URL}](${URL})** (sign in as \`${VIA_BASIC_AUTH_USERNAME}\`)${SECOND}
+
+${HIDDEN}
+
+Open ${LIMIT}. ${ENDS}
+EOF2
+)"
 
 ci_group_end
